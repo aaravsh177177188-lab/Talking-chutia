@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Talking Chutia – Debug Build</title>
+
+<!-- Howler for sound -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/howler/2.2.4/howler.min.js"></script>
+
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#0a0a0a;font-family:system-ui;color:#fff;overflow:hidden}
+#ui{position:fixed;bottom:0;left:0;width:100%;display:flex;gap:6px;padding:8px;background:#000}
+button{flex:1;background:#1f2937;color:#fff;border:0;border-radius:12px;padding:12px;font-size:14px}
+#debug{position:fixed;top:0;left:0;width:100%;max-height:120px;overflow:auto;background:rgba(0,0,0,.75);font-size:11px;padding:4px}
+canvas{display:block}
+</style>
+</head>
+<body>
+
+<div id="debug"></div>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <button id="btnPunch">👊</button>
+  <button id="btnPet">🫶</button>
+  <button id="btnFeed">🍔</button>
+  <button id="btnFart">💨</button>
+  <button id="btnTalk">🎤</button>
+</div>
+
+<script>
+/******************** DEBUG *************************/
+const debugBox = document.getElementById('debug');
+function log(msg){
+  const line=document.createElement('div');
+  line.textContent=new Date().toLocaleTimeString()+" | "+msg;
+  debugBox.appendChild(line);
+  debugBox.scrollTop=debugBox.scrollHeight;
+}
+log('Game booting');
+
+/******************** CANVAS *************************/
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+function resize(){
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight - 70;
+  log('Canvas resized '+canvas.width+'x'+canvas.height);
+}
+window.addEventListener('resize',resize);
+resize();
+
+/******************** AUDIO *************************/
+let audioCtx = null;
+let micSource = null;
+let micStarted = false;
+
+const sounds = {
+  punch: new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/wood_plank_flicks.ogg'], volume: 0.8 }),
+  pet: new Howl({ src: ['https://actions.google.com/sounds/v1/human_voices/child_giggle.ogg'], volume: 0.7 }),
+  feed: new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/pop.ogg'], volume: 0.7 }),
+  fart: new Howl({ src: ['https://actions.google.com/sounds/v1/cartoon/air_release.ogg'], volume: 0.9 })
+};
+log('Sounds loaded');
+
+async function startTalkBack(){
+  if(micStarted){ log('TalkBack already active'); return; }
+  try{
+    const stream = await navigator.mediaDevices.getUserMedia({ audio:true });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    micSource = audioCtx.createMediaStreamSource(stream);
+    micSource.connect(audioCtx.destination);
+    micStarted = true;
+    log('TalkBack started');
+  }catch(e){
+    log('Mic error: '+e.message);
+  }
+}
+
+/******************** CHARACTER *************************/
+const dude = {
+  x: 0,
+  y: 0,
+  shake: 0,
+  mood: 0,
+  hunger: 100,
+  energy: 100,
+  rage: 0
+};
+
+/******************** PARTICLES *************************/
+const particles = [];
+function spawnFart(){
+  log('Fart particles');
+  for(let i=0;i<30;i++){
+    particles.push({
+      x: dude.x,
+      y: dude.y + 90,
+      vx: (Math.random() - 0.5) * 4,
+      vy: -Math.random() * 3,
+      life: 60
+    });
+  }
+}
+
+/******************** DRAW *************************/
+function drawHouse(){
+  ctx.fillStyle = '#cde9ff';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = '#e5d3b3';
+  ctx.fillRect(0,canvas.height-120,canvas.width,120);
+}
+
+function drawDude(){
+  dude.x = canvas.width/2 + dude.shake;
+  dude.y = canvas.height - 220;
+
+  ctx.save();
+  ctx.translate(dude.x, dude.y);
+
+  // head
+  ctx.fillStyle = '#8d5524';
+  ctx.beginPath();
+  ctx.arc(0,0,40,0,Math.PI*2);
+  ctx.fill();
+
+  // hair
+  ctx.fillStyle = '#000';
+  ctx.fillRect(-45,-55,90,30);
+
+  // choti
+  ctx.fillRect(-5,40,10,55);
+
+  // eyes
+  ctx.fillStyle = '#000';
+  ctx.fillRect(-15,-5,8,8);
+  ctx.fillRect(7,-5,8,8);
+
+  // mouth
+  ctx.fillStyle = '#900';
+  ctx.fillRect(-12,12,24,4 + Math.max(0,dude.mood));
+
+  // shirt
+  ctx.fillStyle = 'green';
+  ctx.fillRect(-45,50,90,90);
+
+  // jeans
+  ctx.fillStyle = 'blue';
+  ctx.fillRect(-40,140,80,60);
+
+  ctx.restore();
+}
+
+function drawParticles(){
+  ctx.fillStyle = 'rgba(120,120,120,0.7)';
+  particles.forEach(p=>{
+    ctx.beginPath();
+    ctx.arc(p.x,p.y,5,0,Math.PI*2);
+    ctx.fill();
+  });
+}
+
+/******************** UPDATE *************************/
+function update(){
+  dude.shake *= 0.85;
+  dude.mood *= 0.9;
+
+  for(let i=particles.length-1;i>=0;i--){
+    const p = particles[i];
+    p.x += p.vx;
+    p.y += p.vy;
+    p.life--;
+    if(p.life<=0) particles.splice(i,1);
+  }
+}
+
+/******************** LOOP *************************/
+function loop(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  drawHouse();
+  drawDude();
+  drawParticles();
+  update();
+  requestAnimationFrame(loop);
+}
+loop();
+
+/******************** UI EVENTS *************************/
+btnPunch.onclick = ()=>{
+  dude.shake = 15;
+  dude.rage += 10;
+  sounds.punch.play();
+  log('Punch');
+};
+
+btnPet.onclick = ()=>{
+  dude.mood += 6;
+  dude.rage = Math.max(0,dude.rage-5);
+  sounds.pet.play();
+  log('Pet');
+};
+
+btnFeed.onclick = ()=>{
+  dude.hunger = Math.min(100,dude.hunger+20);
+  sounds.feed.play();
+  log('Feed');
+};
+
+btnFart.onclick = ()=>{
+  spawnFart();
+  sounds.fart.play();
+  log('Fart');
+};
+
+btnTalk.onclick = startTalkBack;
+
+log('Game ready');
+</script>
+</body>
+</html>
+
